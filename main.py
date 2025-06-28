@@ -8,11 +8,11 @@ class MemorySimulator:
     def __init__(self, frame_count, replacement_policy):
         self.frame_count = frame_count
         self.replacement_policy = replacement_policy.lower()
-        self.page_table = {}  # page_num -> frame_num
-        self.frame_table = {}  # frame_num -> {'page_num': X, 'dirty': bool}
+        self.page_table = {}  
+        self.frame_table = {}  
         self.dirty_pages = set()
         
-        # Estadísticas
+        
         self.page_faults = 0
         self.disk_writes = 0
         self.replacements = 0
@@ -22,14 +22,14 @@ class MemorySimulator:
         self.page_access_frequency = {}
         self.start_time = time.time()
 
-        # Estructuras específicas de políticas
+        
         if self.replacement_policy == 'fifo':
             self.fifo_queue = deque()
         elif self.replacement_policy == 'lru':
             self.lru_cache = OrderedDict()
         elif self.replacement_policy == 'opt':
-            self.opt_future_refs = {}  # page_num -> heap de posiciones futuras
-            self.next_ref = {}  # page_num -> próxima posición de referencia
+            self.opt_future_refs = {}   
+            self.next_ref = {} 
 
     def load_trace_file(self, filename):
         references = []
@@ -44,12 +44,10 @@ class MemorySimulator:
                             page_num = address >> 12
                             references.append((page_num, operation))
                             
-                            # Estadísticas de frecuencia
                             self.page_access_frequency[page_num] = self.page_access_frequency.get(page_num, 0) + 1
                         except ValueError:
                             continue
             
-            # Preprocesamiento para OPT
             if self.replacement_policy == 'opt':
                 self._preprocess_opt_references(references)
             
@@ -60,20 +58,17 @@ class MemorySimulator:
 
     def _preprocess_opt_references(self, references):
         """Preprocesa las referencias para OPT de manera eficiente."""
-        # Primero recolectamos todas las posiciones por página
         page_positions = {}
         for pos, (page_num, _) in enumerate(references):
             if page_num not in page_positions:
                 page_positions[page_num] = []
             page_positions[page_num].append(pos)
         
-        # Para cada página, creamos un min-heap de sus posiciones futuras
         for page_num in page_positions:
             positions = page_positions[page_num]
             heapq.heapify(positions)
             self.opt_future_refs[page_num] = positions
         
-        # Inicializar next_ref con la primera referencia de cada página
         self.next_ref = {}
         for page_num in self.opt_future_refs:
             if self.opt_future_refs[page_num]:
@@ -84,7 +79,6 @@ class MemorySimulator:
             self.total_accesses += 1
             self.operation_stats[operation] += 1
             
-            # Actualizar próxima referencia para OPT
             if self.replacement_policy == 'opt':
                 self._update_opt_next_ref(page_num, current_pos)
             
@@ -92,11 +86,9 @@ class MemorySimulator:
                 self.hits += 1
                 frame_num = self.page_table[page_num]
                 
-                # Actualizar LRU si es necesario
                 if self.replacement_policy == 'lru':
                     self.lru_cache.move_to_end(page_num)
                 
-                # Marcar como sucia si es escritura
                 if operation == 'W':
                     self.frame_table[frame_num]['dirty'] = True
                     self.dirty_pages.add(page_num)
@@ -115,39 +107,31 @@ class MemorySimulator:
     def _handle_page_fault(self, page_num, operation, current_pos):
         """Maneja un fallo de página."""
         if len(self.page_table) < self.frame_count:
-            # Todavía hay marcos disponibles
             frame_num = len(self.page_table)
         else:
-            # Necesitamos reemplazar una página
             self.replacements += 1
             frame_num = self._select_victim_frame(current_pos)
             victim_page = self.frame_table[frame_num]['page_num']
             
-            # Si la página víctima está sucia, necesitamos escribir a disco
             if self.frame_table[frame_num]['dirty']:
                 self.disk_writes += 1
             
-            # Limpiar las estructuras de datos
             del self.page_table[victim_page]
             if victim_page in self.dirty_pages:
                 self.dirty_pages.remove(victim_page)
             
-            # Limpiar de estructuras específicas de políticas
             if self.replacement_policy == 'lru' and victim_page in self.lru_cache:
                 del self.lru_cache[victim_page]
         
-        # Asignar el nuevo marco
         self.page_table[page_num] = frame_num
         self.frame_table[frame_num] = {
             'page_num': page_num,
             'dirty': (operation == 'W')
         }
         
-        # Marcar como sucia si es escritura
         if operation == 'W':
             self.dirty_pages.add(page_num)
         
-        # Actualizar estructuras específicas de políticas
         if self.replacement_policy == 'fifo':
             self.fifo_queue.append(page_num)
         elif self.replacement_policy == 'lru':
@@ -170,11 +154,9 @@ class MemorySimulator:
             for page in self.page_table:
                 next_use = self.next_ref.get(page, None)
                 
-                # Preferir páginas que no se usarán más
                 if next_use is None:
                     return self.page_table[page]
                 
-                # Buscar la página con la referencia más lejana
                 if next_use > farthest_next_use:
                     farthest_next_use = next_use
                     victim_page = page
@@ -191,7 +173,7 @@ class MemorySimulator:
         hit_rate = (self.hits / self.total_accesses) * 100
         fault_rate = (self.page_faults / self.total_accesses) * 100
         execution_time = time.time() - self.start_time
-        eat = 100 + (fault_rate / 100 * 10_000_000)  # Tiempo de acceso efectivo
+        eat = 100 + (fault_rate / 100 * 10_000_000)  
         
         return {
             'total_accesses': self.total_accesses,
@@ -220,7 +202,6 @@ def run_simulations(trace_files, frame_counts, policies):
         print(f"\nProcesando archivo: {trace_file}")
         
         try:
-            # Contar líneas para mostrar progreso
             with open(trace_file, 'r') as f:
                 total_lines = sum(1 for _ in f)
             print(f"Total referencias: {total_lines:,}")
@@ -232,7 +213,6 @@ def run_simulations(trace_files, frame_counts, policies):
             for policy in policies:
                 print(f"\nEjecutando {policy.upper()} con {frames} marcos...", end='', flush=True)
                 
-                # Crear y ejecutar simulador
                 simulator = MemorySimulator(frames, policy)
                 simulator.trace_file = trace_file
                 references = simulator.load_trace_file(trace_file)
@@ -253,7 +233,6 @@ def print_final_report(results):
     
     print("\n\n=== REPORTE FINAL DE SIMULACIONES ===")
     
-    # Tabla comparativa de todas las simulaciones
     print("\nTabla Comparativa:")
     print("="*120)
     print(f"{'Archivo':<15} {'Marcos':>8} {'Política':>10} {'Accesos':>12} {'Hits':>10} {'Page Faults':>12} "
@@ -266,7 +245,6 @@ def print_final_report(results):
               f"{res['replacements']:>12,} {res['disk_writes']:>12,} {res['hit_rate']:>9.2f}% "
               f"{res['eat']:>12.2f} {res['execution_time']:>10.2f}")
     
-    # Páginas más accedidas combinadas
     print("\n\nPáginas más accedidas (combinado):")
     print("="*60)
     print(f"{'Página':<15} {'Accesos':>12} {'% del total':>15}")
@@ -285,7 +263,6 @@ def print_final_report(results):
         percentage = (count / total_all_accesses) * 100
         print(f"0x{page:08X}{'':<7} {count:>12,} {percentage:>14.2f}%")
 
-    # Comparación de políticas
     print("\n\nComparación de Políticas:")
     print("="*90)
     print(f"{'Política':<10} {'Avg Hit Rate':>15} {'Avg Page Faults':>18} {'Avg EAT (ns)':>15} "
