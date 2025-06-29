@@ -11,8 +11,6 @@ class MemorySimulator:
         self.page_table = {}  
         self.frame_table = {}  
         self.dirty_pages = set()
-        
-        
         self.page_faults = 0
         self.disk_writes = 0
         self.replacements = 0
@@ -22,7 +20,6 @@ class MemorySimulator:
         self.page_access_frequency = {}
         self.start_time = time.time()
 
-        
         if self.replacement_policy == 'fifo':
             self.fifo_queue = deque()
         elif self.replacement_policy == 'lru':
@@ -43,7 +40,6 @@ class MemorySimulator:
                             operation = parts[1]
                             page_num = address >> 12
                             references.append((page_num, operation))
-                            
                             self.page_access_frequency[page_num] = self.page_access_frequency.get(page_num, 0) + 1
                         except ValueError:
                             continue
@@ -57,7 +53,6 @@ class MemorySimulator:
             sys.exit(1)
 
     def _preprocess_opt_references(self, references):
-        """Preprocesa las referencias para OPT de manera eficiente."""
         page_positions = {}
         for pos, (page_num, _) in enumerate(references):
             if page_num not in page_positions:
@@ -97,7 +92,6 @@ class MemorySimulator:
                 self._handle_page_fault(page_num, operation, current_pos)
 
     def _update_opt_next_ref(self, page_num, current_pos):
-        """Actualiza la próxima referencia para una página en OPT."""
         if page_num in self.next_ref and current_pos == self.next_ref[page_num]:
             if page_num in self.opt_future_refs and self.opt_future_refs[page_num]:
                 self.next_ref[page_num] = heapq.heappop(self.opt_future_refs[page_num])
@@ -105,7 +99,6 @@ class MemorySimulator:
                 self.next_ref[page_num] = None
 
     def _handle_page_fault(self, page_num, operation, current_pos):
-        """Maneja un fallo de página."""
         if len(self.page_table) < self.frame_count:
             frame_num = len(self.page_table)
         else:
@@ -138,7 +131,6 @@ class MemorySimulator:
             self.lru_cache[page_num] = frame_num
 
     def _select_victim_frame(self, current_pos):
-        """Selecciona una víctima según la política de reemplazo."""
         if self.replacement_policy == 'fifo':
             victim_page = self.fifo_queue.popleft()
             return self.page_table[victim_page]
@@ -166,14 +158,13 @@ class MemorySimulator:
         return 0
 
     def get_stats(self):
-        """Devuelve un diccionario con todas las estadísticas."""
         if self.total_accesses == 0:
             return {}
         
         hit_rate = (self.hits / self.total_accesses) * 100
         fault_rate = (self.page_faults / self.total_accesses) * 100
         execution_time = time.time() - self.start_time
-        eat = 100 + (fault_rate / 100 * 10_000_000)  
+        eat = 100 + (fault_rate / 100 * 10_000_000)
         
         return {
             'total_accesses': self.total_accesses,
@@ -190,12 +181,38 @@ class MemorySimulator:
             'frames': self.frame_count,
             'policy': self.replacement_policy.upper(),
             'trace_file': getattr(self, 'trace_file', ''),
-            'top_pages': sorted(self.page_access_frequency.items(), 
-                              key=lambda x: x[1], reverse=True)[:20]
+            'top_pages': sorted(self.page_access_frequency.items(), key=lambda x: x[1], reverse=True)[:20]
         }
 
+def print_individual_report(result):
+    print(f"\n{'='*80}")
+    print(f"REPORTE INDIVIDUAL - {result['policy']} con {result['frames']} marcos")
+    print(f"Archivo: {result['trace_file']}")
+    print(f"{'='*80}")
+    print("\nESTADÍSTICAS PRINCIPALES:")
+    print(f"- Total accesos: {result['total_accesses']:,}")
+    print(f"- Hits: {result['hits']:,} ({result['hit_rate']:.2f}%)")
+    print(f"- Page faults: {result['page_faults']:,} ({result['fault_rate']:.2f}%)")
+    print(f"- Reemplazos: {result['replacements']:,}")
+    print(f"- Escrituras a disco: {result['disk_writes']:,}")
+    print(f"- Tiempo de acceso efectivo (EAT): {result['eat']:,.2f} ns")
+    print(f"- Tiempo de ejecución: {result['execution_time']:.2f} segundos")
+    print("\nDISTRIBUCIÓN DE OPERACIONES:")
+    total_ops = result['reads'] + result['writes']
+    if total_ops > 0:
+        read_pct = (result['reads'] / total_ops) * 100
+        write_pct = (result['writes'] / total_ops) * 100
+        print(f"- Lecturas (R): {result['reads']:,} ({read_pct:.2f}%)")
+        print(f"- Escrituras (W): {result['writes']:,} ({write_pct:.2f}%)")
+    print("\nTOP 10 PÁGINAS MÁS ACCEDIDAS:")
+    print(f"{'Página':<15} {'Accesos':>12} {'% del total':>15}")
+    print("-"*42)
+    for page, count in result['top_pages'][:10]:
+        pct = (count / result['total_accesses']) * 100
+        print(f"0x{page:08X}{'':<7} {count:>12,} {pct:>14.2f}%")
+    print(f"{'='*80}\n")
+
 def run_simulations(trace_files, frame_counts, policies):
-    """Ejecuta múltiples simulaciones con diferentes configuraciones."""
     all_results = []
     
     for trace_file in trace_files:
@@ -226,13 +243,15 @@ def run_simulations(trace_files, frame_counts, policies):
     return all_results
 
 def print_final_report(results):
-    """Imprime un reporte consolidado de todas las simulaciones."""
     if not results:
         print("No hay resultados para mostrar.")
         return
     
-    print("\n\n=== REPORTE FINAL DE SIMULACIONES ===")
+    print("\n\n=== REPORTES INDIVIDUALES POR CONFIGURACIÓN ===")
+    for res in results:
+        print_individual_report(res)
     
+    print("\n\n=== REPORTE COMPARATIVO FINAL ===")
     print("\nTabla Comparativa:")
     print("="*120)
     print(f"{'Archivo':<15} {'Marcos':>8} {'Política':>10} {'Accesos':>12} {'Hits':>10} {'Page Faults':>12} "
@@ -298,7 +317,6 @@ def print_final_report(results):
               f"{avg_writes:>14,.2f} {avg_time:>14,.2f}")
 
 def main():
-    """Función principal que maneja los argumentos de línea de comandos."""
     parser = argparse.ArgumentParser(description='Simulador de Memoria Virtual con Reporte Consolidado')
     parser.add_argument('trace_files', nargs='+', help='Archivo(s) de traza a procesar')
     parser.add_argument('--frames', nargs='+', type=int, default=[10, 50, 100],
